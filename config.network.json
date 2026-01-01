@@ -1,0 +1,12 @@
+{
+  "commandTimeout": 120,
+  "enabled": true,
+  "containerEscape": false,
+  "network": {
+    "enabled": true,
+    "host": "localhost",
+    "port": 3000,
+    "allowedIPs": ["127.0.0.1"],
+    "allowedSubnets": ["192.168.1.0/24"]
+  }
+}

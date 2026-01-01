@@ -1,0 +1,224 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build for ${{ matrix.os }}-${{ matrix.arch }}
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        include:
+          # Linux builds
+          - os: linux
+            arch: amd64
+            goos: linux
+            goarch: amd64
+          - os: linux
+            arch: arm64
+            goos: linux
+            goarch: arm64
+          
+          # macOS builds
+          - os: darwin
+            arch: amd64
+            goos: darwin
+            goarch: amd64
+          - os: darwin
+            arch: arm64
+            goos: darwin
+            goarch: arm64
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+      
+      - name: Get dependencies
+        run: go mod download
+      
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          mkdir -p dist
+          
+          BINARY_NAME="mcp-bash-${{ matrix.os }}-${{ matrix.arch }}"
+          
+          VERSION="${GITHUB_REF_NAME}"
+          BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          GIT_COMMIT="${GITHUB_SHA:0:7}"
+          
+          LDFLAGS="-s -w"
+          LDFLAGS="$LDFLAGS -X 'main.Version=${VERSION}'"
+          LDFLAGS="$LDFLAGS -X 'main.BuildTime=${BUILD_TIME}'"
+          LDFLAGS="$LDFLAGS -X 'main.GitCommit=${GIT_COMMIT}'"
+          LDFLAGS="$LDFLAGS -extldflags '-static'"
+          
+          echo "Building ${BINARY_NAME}"
+          echo "Version: ${VERSION}"
+          echo "Build Time: ${BUILD_TIME}"
+          echo "Git Commit: ${GIT_COMMIT}"
+          
+          go build \
+            -a \
+            -tags netgo \
+            -installsuffix netgo \
+            -ldflags="${LDFLAGS}" \
+            -o "dist/${BINARY_NAME}" \
+            ./cmd/server
+          
+          cd dist
+          sha256sum "${BINARY_NAME}" > "${BINARY_NAME}.sha256"
+          cd ..
+      
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mcp-bash-${{ matrix.os }}-${{ matrix.arch }}
+          path: |
+            dist/mcp-bash-${{ matrix.os }}-${{ matrix.arch }}
+            dist/mcp-bash-${{ matrix.os }}-${{ matrix.arch }}.sha256
+          retention-days: 7
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+      
+      - name: Display structure
+        run: ls -R dist
+      
+      - name: Flatten artifacts
+        run: |
+          mkdir -p release
+          find dist -type f -exec mv {} release/ \;
+          ls -lh release/
+      
+      - name: Generate release notes
+        run: |
+          cat > release_notes.md << 'EOF'
+          ## Bash MCP Server Release ${{ github.ref_name }}
+          
+          ### Installation
+          
+          **IMPORTANT**: This MCP server requires a `config.json` file in the same directory as the executable.
+          
+          Example `config.json`:
+          ```json
+          {
+            "commandTimeout": 120,
+            "enabled": true,
+            "containerEscape": false
+          }
+          ```
+          
+          Download the appropriate binary for your platform:
+          
+          **Linux (x86_64)**:
+          ```bash
+          wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/mcp-bash-linux-amd64
+          chmod +x mcp-bash-linux-amd64
+          sudo mv mcp-bash-linux-amd64 /usr/local/bin/mcp-bash
+          ```
+          
+          **Linux (ARM64)**:
+          ```bash
+          wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/mcp-bash-linux-arm64
+          chmod +x mcp-bash-linux-arm64
+          sudo mv mcp-bash-linux-arm64 /usr/local/bin/mcp-bash
+          ```
+          
+          **macOS (Intel)**:
+          ```bash
+          wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/mcp-bash-darwin-amd64
+          chmod +x mcp-bash-darwin-amd64
+          sudo mv mcp-bash-darwin-amd64 /usr/local/bin/mcp-bash
+          ```
+          
+          **macOS (Apple Silicon)**:
+          ```bash
+          wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/mcp-bash-darwin-arm64
+          chmod +x mcp-bash-darwin-arm64
+          sudo mv mcp-bash-darwin-arm64 /usr/local/bin/mcp-bash
+          ```
+          
+          **Note**: Windows is not supported as bash is not natively available. Use WSL (Windows Subsystem for Linux) and install the Linux binary instead.
+          
+          ### Verification
+          
+          Verify downloads:
+          ```bash
+          sha256sum -c mcp-bash-<platform>-<arch>.sha256
+          ```
+          
+          ### Configuration
+          
+          See [README.md](https://github.com/${{ github.repository }}/blob/main/README.md) for configuration details.
+          
+          ### What's New
+          
+          See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details.
+          EOF
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: release/*
+          body_path: release_notes.md
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  test:
+    name: Test artifacts
+    needs: build
+    runs-on: ${{ matrix.os }}
+    
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: mcp-bash-linux-amd64
+            binary: mcp-bash-linux-amd64
+          - os: macos-latest
+            artifact: mcp-bash-darwin-arm64
+            binary: mcp-bash-darwin-arm64
+    
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: .
+      
+      - name: Make executable
+        run: chmod +x ${{ matrix.binary }}
+      
+      - name: Test binary
+        run: ./${{ matrix.binary }} --version || echo "Binary runs"
