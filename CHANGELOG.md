@@ -13,7 +13,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Persistent bash session management
 - Stdio transport for MCP communication
 - Network transport with IP whitelisting
-- Container escape mode for host access
 - Configurable command timeout
 - Automatic session restart capability
 - Comprehensive error handling and logging

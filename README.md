@@ -28,8 +28,16 @@ Download the latest release for your platform from the [Releases page](https://g
 ```bash
 wget https://github.com/LaurieRhodes/mcp-bash-go/releases/latest/download/mcp-bash-linux-amd64
 chmod +x mcp-bash-linux-amd64
-mkdir /usr/local/bin/mcp-bash 
+sudo mkdir -p /usr/local/bin/mcp-bash 
 sudo mv mcp-bash-linux-amd64 /usr/local/bin/mcp-bash/mcp-bash
+
+# Create default config file
+sudo tee /usr/local/bin/mcp-bash/config.json > /dev/null <<'EOF'
+{
+  "commandTimeout": 120,
+  "enabled": true
+}
+EOF
 ```
 
 **macOS (Apple Silicon)**:
@@ -37,8 +45,16 @@ sudo mv mcp-bash-linux-amd64 /usr/local/bin/mcp-bash/mcp-bash
 ```bash
 wget https://github.com/LaurieRhodes/mcp-bash-go/releases/latest/download/mcp-bash-darwin-arm64
 chmod +x mcp-bash-darwin-arm64
-mkdir /usr/local/bin/mcp-bash 
+sudo mkdir -p /usr/local/bin/mcp-bash 
 sudo mv mcp-bash-darwin-arm64 /usr/local/bin/mcp-bash/mcp-bash
+
+# Create default config file
+sudo tee /usr/local/bin/mcp-bash/config.json > /dev/null <<'EOF'
+{
+  "commandTimeout": 120,
+  "enabled": true
+}
+EOF
 ```
 
 **Windows**: Not supported natively (no bash). Use WSL (Windows Subsystem for Linux) and install the Linux binary.
@@ -53,13 +69,14 @@ go build -o mcp-bash ./cmd/server
 
 ## ⚙️ Configuration
 
-The server requires a `config.json` file in the same directory as the executable:
+The server requires a `config.json` file in the same directory as the executable.
+
+**Minimal Configuration**:
 
 ```json
 {
   "commandTimeout": 120,
-  "enabled": true,
-  "containerEscape": false
+  "enabled": true
 }
 ```
 
@@ -67,20 +84,15 @@ The server requires a `config.json` file in the same directory as the executable
 
 - `commandTimeout`: Maximum execution time in seconds (default: 120)
 - `enabled`: Set to false to disable the bash tool entirely
-- `containerEscape`: Enable to execute commands on the host instead of in container
-  - **WARNING**: Only enable if you need host access
-  - Requires `nsenter` in container environment
-  - Uses `nsenter -t 1 -m -u -i -n -p -- bash` to access host
 
-### Network Mode (Optional)
+### Network Mode (Advanced)
 
-For network-based MCP communication:
+For network-based MCP communication, see `config.network.json` example:
 
 ```json
 {
   "commandTimeout": 120,
   "enabled": true,
-  "containerEscape": false,
   "network": {
     "enabled": true,
     "host": "localhost",
@@ -150,20 +162,18 @@ Execute bash commands in a persistent session.
 - ✅ No sudo/root access by default
 - ✅ Configurable timeout prevents infinite loops
 - ✅ Session can be restarted if needed
-- ✅ Container isolation by default
 - ✅ Optional IP whitelisting for network mode
 
 **Security Risks**:
 
 - ❌ No command whitelisting
-- ❌ No sandboxing when container escape enabled
+- ❌ No sandboxing
 - ❌ Executes arbitrary commands from AI
 
 **Best Practices**:
 
 - Run with minimal necessary permissions
 - Use in development/testing environments
-- Keep `containerEscape` disabled unless required
 - Review AI-generated commands before production use
 - Use Docker/VMs for additional isolation
 - Monitor logs for unexpected commands

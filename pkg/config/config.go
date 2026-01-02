@@ -20,10 +20,9 @@ type NetworkConfig struct {
 
 // Config holds the application configuration
 type Config struct {
-	CommandTimeout  int           `json:"commandTimeout"`  // in seconds
-	Enabled         bool          `json:"enabled"`
-	ContainerEscape bool          `json:"containerEscape"` // if true, execute commands on the host instead of in container
-	Network         NetworkConfig `json:"network"`
+	CommandTimeout int           `json:"commandTimeout"` // in seconds
+	Enabled        bool          `json:"enabled"`
+	Network        NetworkConfig `json:"network"`
 }
 
 // Default config file name
@@ -100,7 +99,6 @@ func LoadConfig() (*Config, error) {
 
 	fmt.Fprintf(os.Stderr, "Configuration loaded successfully\n")
 	fmt.Fprintf(os.Stderr, "Command timeout: %d seconds\n", config.CommandTimeout)
-	fmt.Fprintf(os.Stderr, "Container escape: %v\n", config.ContainerEscape)
 	fmt.Fprintf(os.Stderr, "Network mode: %v\n", config.Network.Enabled)
 	return config, nil
 }
@@ -113,9 +111,8 @@ func (c *Config) GetTimeout() time.Duration {
 // createDefaultConfig creates a default config file
 func createDefaultConfig(configFilePath string) (*Config, error) {
 	config := &Config{
-		CommandTimeout:  120,
-		Enabled:         true,
-		ContainerEscape: false, // default to safe containerized execution
+		CommandTimeout: 120,
+		Enabled:        true,
 	}
 
 	// Convert config to JSON

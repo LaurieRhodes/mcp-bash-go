@@ -25,7 +25,7 @@ func main() {
 	}
 
 	// Create the bash manager
-	bashManager := bash.NewBashManager(cfg.GetTimeout(), cfg.ContainerEscape)
+	bashManager := bash.NewBashManager(cfg.GetTimeout())
 	defer bashManager.Close()
 
 	// Set up graceful shutdown
@@ -87,7 +87,6 @@ func main() {
 	// Start the server with the chosen transport
 	fmt.Fprintf(os.Stderr, "Bash MCP Server v1.0.0 starting\n")
 	fmt.Fprintf(os.Stderr, "Command timeout: %v\n", cfg.GetTimeout())
-	fmt.Fprintf(os.Stderr, "Container escape: %v\n", cfg.ContainerEscape)
 
 	err = server.Connect(transport)
 	if err != nil {

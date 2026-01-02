@@ -128,46 +128,85 @@ jobs:
           
           **IMPORTANT**: This MCP server requires a `config.json` file in the same directory as the executable.
           
-          Example `config.json`:
-          ```json
-          {
-            "commandTimeout": 120,
-            "enabled": true,
-            "containerEscape": false
-          }
-          ```
-          
-          Download the appropriate binary for your platform:
+          Download the appropriate binary for your platform and create the config file:
           
           **Linux (x86_64)**:
           ```bash
           wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/mcp-bash-linux-amd64
           chmod +x mcp-bash-linux-amd64
-          sudo mv mcp-bash-linux-amd64 /usr/local/bin/mcp-bash
+          sudo mkdir -p /usr/local/bin/mcp-bash 
+          sudo mv mcp-bash-linux-amd64 /usr/local/bin/mcp-bash/mcp-bash
+          
+          # Create default config file
+          sudo tee /usr/local/bin/mcp-bash/config.json > /dev/null <<'CONFIG'
+          {
+            "commandTimeout": 120,
+            "enabled": true
+          }
+          CONFIG
           ```
           
           **Linux (ARM64)**:
           ```bash
           wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/mcp-bash-linux-arm64
           chmod +x mcp-bash-linux-arm64
-          sudo mv mcp-bash-linux-arm64 /usr/local/bin/mcp-bash
+          sudo mkdir -p /usr/local/bin/mcp-bash 
+          sudo mv mcp-bash-linux-arm64 /usr/local/bin/mcp-bash/mcp-bash
+          
+          # Create default config file
+          sudo tee /usr/local/bin/mcp-bash/config.json > /dev/null <<'CONFIG'
+          {
+            "commandTimeout": 120,
+            "enabled": true
+          }
+          CONFIG
           ```
           
           **macOS (Intel)**:
           ```bash
           wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/mcp-bash-darwin-amd64
           chmod +x mcp-bash-darwin-amd64
-          sudo mv mcp-bash-darwin-amd64 /usr/local/bin/mcp-bash
+          sudo mkdir -p /usr/local/bin/mcp-bash 
+          sudo mv mcp-bash-darwin-amd64 /usr/local/bin/mcp-bash/mcp-bash
+          
+          # Create default config file
+          sudo tee /usr/local/bin/mcp-bash/config.json > /dev/null <<'CONFIG'
+          {
+            "commandTimeout": 120,
+            "enabled": true
+          }
+          CONFIG
           ```
           
           **macOS (Apple Silicon)**:
           ```bash
           wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/mcp-bash-darwin-arm64
           chmod +x mcp-bash-darwin-arm64
-          sudo mv mcp-bash-darwin-arm64 /usr/local/bin/mcp-bash
+          sudo mkdir -p /usr/local/bin/mcp-bash 
+          sudo mv mcp-bash-darwin-arm64 /usr/local/bin/mcp-bash/mcp-bash
+          
+          # Create default config file
+          sudo tee /usr/local/bin/mcp-bash/config.json > /dev/null <<'CONFIG'
+          {
+            "commandTimeout": 120,
+            "enabled": true
+          }
+          CONFIG
           ```
           
           **Note**: Windows is not supported as bash is not natively available. Use WSL (Windows Subsystem for Linux) and install the Linux binary instead.
+          
+          ### Configuration
+          
+          The default config file contains:
+          ```json
+          {
+            "commandTimeout": 120,
+            "enabled": true
+          }
+          ```
+          
+          For advanced network-based MCP communication, see the `config.network.json` example in the repository.
           
           ### Verification
           
@@ -175,10 +214,6 @@ jobs:
           ```bash
           sha256sum -c mcp-bash-<platform>-<arch>.sha256
           ```
-          
-          ### Configuration
-          
-          See [README.md](https://github.com/${{ github.repository }}/blob/main/README.md) for configuration details.
           
           ### What's New
           

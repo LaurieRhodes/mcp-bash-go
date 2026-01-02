@@ -1,5 +1,4 @@
 {
   "commandTimeout": 120,
-  "enabled": true,
-  "containerEscape": false
+  "enabled": true
 }

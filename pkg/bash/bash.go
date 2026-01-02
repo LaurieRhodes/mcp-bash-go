@@ -27,21 +27,19 @@ type BashSession struct {
 
 // BashManager manages bash sessions
 type BashManager struct {
-	session         *BashSession
-	sessionMutex    sync.Mutex
-	defaultTimeout  time.Duration
-	containerEscape bool
+	session        *BashSession
+	sessionMutex   sync.Mutex
+	defaultTimeout time.Duration
 }
 
 // NewBashManager creates a new bash manager
-func NewBashManager(timeout time.Duration, containerEscape bool) *BashManager {
+func NewBashManager(timeout time.Duration) *BashManager {
 	if timeout == 0 {
 		timeout = 120 * time.Second // Default 120 second timeout
 	}
-	
+
 	return &BashManager{
-		defaultTimeout:  timeout,
-		containerEscape: containerEscape,
+		defaultTimeout: timeout,
 	}
 }
 
@@ -82,16 +80,8 @@ func (bm *BashManager) createSession() error {
 	}
 
 	// Create the bash command
-	// If containerEscape is enabled, use nsenter to execute on the host
-	if bm.containerEscape {
-		// Use nsenter to escape the container and run bash on the host
-		// This accesses PID 1's namespaces (the host)
-		session.cmd = exec.Command("nsenter", "-t", "1", "-m", "-u", "-i", "-n", "-p", "--", "bash")
-	} else {
-		// Run bash within the container
-		session.cmd = exec.Command("bash")
-	}
-	
+	session.cmd = exec.Command("bash")
+
 	// Get stdin/stdout/stderr pipes
 	var err error
 	session.stdin, err = session.cmd.StdinPipe()

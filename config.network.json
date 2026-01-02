@@ -1,7 +1,6 @@
 {
   "commandTimeout": 120,
   "enabled": true,
-  "containerEscape": false,
   "network": {
     "enabled": true,
     "host": "localhost",
