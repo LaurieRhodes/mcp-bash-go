@@ -134,11 +134,11 @@ jobs:
           ```bash
           wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/mcp-bash-linux-amd64
           chmod +x mcp-bash-linux-amd64
-          sudo mkdir -p /usr/local/bin/mcp-bash 
-          sudo mv mcp-bash-linux-amd64 /usr/local/bin/mcp-bash/mcp-bash
+          sudo mkdir -p /usr/local/bin/mcp-servers/bash
+          sudo mv mcp-bash-linux-amd64 /usr/local/bin/mcp-servers/bash/mcp-bash
           
           # Create default config file
-          sudo tee /usr/local/bin/mcp-bash/config.json > /dev/null <<'CONFIG'
+          sudo tee /usr/local/bin/mcp-servers/bash/config.json > /dev/null <<'CONFIG'
           {
             "commandTimeout": 120,
             "enabled": true
@@ -150,11 +150,11 @@ jobs:
           ```bash
           wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/mcp-bash-linux-arm64
           chmod +x mcp-bash-linux-arm64
-          sudo mkdir -p /usr/local/bin/mcp-bash 
-          sudo mv mcp-bash-linux-arm64 /usr/local/bin/mcp-bash/mcp-bash
+          sudo mkdir -p /usr/local/bin/mcp-servers/bash
+          sudo mv mcp-bash-linux-arm64 /usr/local/bin/mcp-servers/bash/mcp-bash
           
           # Create default config file
-          sudo tee /usr/local/bin/mcp-bash/config.json > /dev/null <<'CONFIG'
+          sudo tee /usr/local/bin/mcp-servers/bash/config.json > /dev/null <<'CONFIG'
           {
             "commandTimeout": 120,
             "enabled": true
@@ -166,11 +166,11 @@ jobs:
           ```bash
           wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/mcp-bash-darwin-amd64
           chmod +x mcp-bash-darwin-amd64
-          sudo mkdir -p /usr/local/bin/mcp-bash 
-          sudo mv mcp-bash-darwin-amd64 /usr/local/bin/mcp-bash/mcp-bash
+          sudo mkdir -p /usr/local/bin/mcp-servers/bash
+          sudo mv mcp-bash-darwin-amd64 /usr/local/bin/mcp-servers/bash/mcp-bash
           
           # Create default config file
-          sudo tee /usr/local/bin/mcp-bash/config.json > /dev/null <<'CONFIG'
+          sudo tee /usr/local/bin/mcp-servers/bash/config.json > /dev/null <<'CONFIG'
           {
             "commandTimeout": 120,
             "enabled": true
@@ -182,11 +182,11 @@ jobs:
           ```bash
           wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/mcp-bash-darwin-arm64
           chmod +x mcp-bash-darwin-arm64
-          sudo mkdir -p /usr/local/bin/mcp-bash 
-          sudo mv mcp-bash-darwin-arm64 /usr/local/bin/mcp-bash/mcp-bash
+          sudo mkdir -p /usr/local/bin/mcp-servers/bash
+          sudo mv mcp-bash-darwin-arm64 /usr/local/bin/mcp-servers/bash/mcp-bash
           
           # Create default config file
-          sudo tee /usr/local/bin/mcp-bash/config.json > /dev/null <<'CONFIG'
+          sudo tee /usr/local/bin/mcp-servers/bash/config.json > /dev/null <<'CONFIG'
           {
             "commandTimeout": 120,
             "enabled": true

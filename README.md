@@ -28,11 +28,11 @@ Download the latest release for your platform from the [Releases page](https://g
 ```bash
 wget https://github.com/LaurieRhodes/mcp-bash-go/releases/latest/download/mcp-bash-linux-amd64
 chmod +x mcp-bash-linux-amd64
-sudo mkdir -p /usr/local/bin/mcp-bash 
-sudo mv mcp-bash-linux-amd64 /usr/local/bin/mcp-bash/mcp-bash
+sudo mkdir -p /usr/local/bin/mcp-servers/bash
+sudo mv mcp-bash-linux-amd64 /usr/local/bin/mcp-servers/bash/mcp-bash
 
 # Create default config file
-sudo tee /usr/local/bin/mcp-bash/config.json > /dev/null <<'EOF'
+sudo tee /usr/local/bin/mcp-servers/bash/config.json > /dev/null <<'EOF'
 {
   "commandTimeout": 120,
   "enabled": true
@@ -45,11 +45,11 @@ EOF
 ```bash
 wget https://github.com/LaurieRhodes/mcp-bash-go/releases/latest/download/mcp-bash-darwin-arm64
 chmod +x mcp-bash-darwin-arm64
-sudo mkdir -p /usr/local/bin/mcp-bash 
-sudo mv mcp-bash-darwin-arm64 /usr/local/bin/mcp-bash/mcp-bash
+sudo mkdir -p /usr/local/bin/mcp-servers/bash
+sudo mv mcp-bash-darwin-arm64 /usr/local/bin/mcp-servers/bash/mcp-bash
 
 # Create default config file
-sudo tee /usr/local/bin/mcp-bash/config.json > /dev/null <<'EOF'
+sudo tee /usr/local/bin/mcp-servers/bash/config.json > /dev/null <<'EOF'
 {
   "commandTimeout": 120,
   "enabled": true
@@ -116,8 +116,7 @@ Edit your Claude Desktop configuration file:
 {
   "mcpServers": {
     "bash": {
-      "command": "/usr/local/bin/mcp-bash/mcp-bash",
-      "args": []
+      "command": "/usr/local/bin/mcp-servers/bash/mcp-bash"
     }
   }
 }
