@@ -86,7 +86,7 @@ func LoadConfig() (*Config, error) {
 	}
 
 	if config.CommandTimeout == 0 {
-		config.CommandTimeout = 120 // default 120 seconds
+		config.CommandTimeout = 600 // default 10 minutes - allows longer workflows
 	}
 
 	// Set network defaults if not specified
@@ -111,7 +111,7 @@ func (c *Config) GetTimeout() time.Duration {
 // createDefaultConfig creates a default config file
 func createDefaultConfig(configFilePath string) (*Config, error) {
 	config := &Config{
-		CommandTimeout: 120,
+		CommandTimeout: 600, // 10 minutes - allows longer workflows without progress notifications
 		Enabled:        true,
 	}
 

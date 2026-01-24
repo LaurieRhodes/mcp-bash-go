@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -35,7 +36,7 @@ type BashManager struct {
 // NewBashManager creates a new bash manager
 func NewBashManager(timeout time.Duration) *BashManager {
 	if timeout == 0 {
-		timeout = 120 * time.Second // Default 120 second timeout
+		timeout = 600 * time.Second // Default 10 minute timeout
 	}
 
 	return &BashManager{
@@ -81,6 +82,17 @@ func (bm *BashManager) createSession() error {
 
 	// Create the bash command
 	session.cmd = exec.Command("bash")
+	
+	// NESTED MCP SUPPORT: Set environment variables for child processes
+	// This allows mcp-cli to detect nested execution and use Unix sockets
+	socketDir := "/tmp/mcp-sockets"
+	os.MkdirAll(socketDir, 0700) // Create socket directory with restrictive permissions
+	
+	session.cmd.Env = append(os.Environ(),
+		"MCP_NESTED=1",                           // Signal nested MCP execution
+		"MCP_SOCKET_DIR="+socketDir,               // Unix socket directory
+		"MCP_SKILLS_SOCKET="+socketDir+"/skills.sock", // Skills server socket path
+	)
 
 	// Get stdin/stdout/stderr pipes
 	var err error

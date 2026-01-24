@@ -9,8 +9,16 @@ import (
 
 	"github.com/LaurieRhodes/mcp-bash-go/pkg/bash"
 	"github.com/LaurieRhodes/mcp-bash-go/pkg/config"
+	"github.com/LaurieRhodes/mcp-bash-go/pkg/env"
 	"github.com/LaurieRhodes/mcp-bash-go/pkg/mcp"
 )
+
+func init() {
+	// Ensure standard system paths are in PATH (ALWAYS runs)
+	// Fixes issues when running from non-interactive shells (Claude Desktop, systemd, cron)
+	// that may have minimal PATH set
+	env.EnsureStandardPaths()
+}
 
 func main() {
 	// Set up signal handling for graceful shutdown
@@ -137,8 +145,8 @@ func setupServerHandlers(server *mcp.Server, bashManager *bash.BashManager) {
 			return nil, fmt.Errorf("invalid call parameters: %w", err)
 		}
 
-		// Process the tool call
-		return handleToolCall(request, bashManager)
+		// Process the tool call with server instance for progress notifications
+		return handleToolCall(request, params, bashManager, server)
 	})
 
 	// Handler for call_tool (backward compatibility)
@@ -149,11 +157,12 @@ func setupServerHandlers(server *mcp.Server, bashManager *bash.BashManager) {
 }
 
 // handleToolCall handles a tool call request
-func handleToolCall(request mcp.CallToolRequest, bashManager *bash.BashManager) (json.RawMessage, error) {
+func handleToolCall(request mcp.CallToolRequest, rawParams json.RawMessage, bashManager *bash.BashManager, server *mcp.Server) (json.RawMessage, error) {
 	var response mcp.CallToolResponse
 
 	switch request.Name {
 	case "bash":
+		// Parse bash-specific arguments
 		command, restart, err := bash.ParseBashArgs(request.Arguments)
 		if err != nil {
 			return createErrorResponse(err.Error())
@@ -167,9 +176,10 @@ func handleToolCall(request mcp.CallToolRequest, bashManager *bash.BashManager) 
 			fmt.Fprintf(os.Stderr, "Bash session restarted\n")
 		}
 
-		// Execute the command
+		// Execute the command (simple, no progress notifications)
 		fmt.Fprintf(os.Stderr, "Executing command: %s\n", command)
 		output, err := bashManager.ExecuteCommand(command)
+
 		if err != nil {
 			return createErrorResponse(fmt.Sprintf("Command execution failed: %v", err))
 		}

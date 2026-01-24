@@ -230,3 +230,13 @@ func formatSubnets(subnets []*net.IPNet) []string {
 	}
 	return result
 }
+
+// SendNotification sends a notification message via network transport
+// Note: This is a simplified implementation for compatibility with the Transport interface
+// For production use with network transport, consider implementing per-connection notification support
+func (t *NetworkTransport) SendNotification(data []byte) error {
+	// Network transport with multiple connections doesn't have a simple way to send
+	// notifications without knowing which connection to send to
+	// For now, return an error indicating this is not supported for network transport
+	return fmt.Errorf("progress notifications not yet supported for network transport (use stdio mode)")
+}

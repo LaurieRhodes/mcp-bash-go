@@ -1,66 +1,148 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+All notable changes to the MCP Bash Server will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-01-23
+
+### Added - Nested MCP Solution
+
+This release solves the critical nested MCP deadlock problem that prevented workflows from executing when called through the bash tool.
+
+#### New Features
+
+- **Automatic environment injection** in bash command execution
+  
+  - `MCP_NESTED=1` - Signals nested MCP context
+  - `MCP_SOCKET_DIR=/tmp/mcp-sockets` - Socket directory location
+  - `MCP_SKILLS_SOCKET=/tmp/mcp-sockets/skills.sock` - Specific socket path
+
+- **Unix socket support** for nested MCP communication
+  
+  - Avoids stdio conflicts when multiple MCP tools interact
+  - Secure filesystem-based permissions (0600)
+  - Dual-mode operation (stdio + Unix socket simultaneously)
+
+- **Auto-detection in workflow execution**
+  
+  - mcp-cli automatically detects `MCP_NESTED=1`
+  - Switches from stdio to Unix socket when appropriate
+  - Falls back to stdio if socket unavailable
+
+# 
+
+### Changed
+
+- Enhanced bash command execution to support nested MCP scenarios
+- Improved error handling for tool execution in nested contexts
+
+### Fixed
+
+- **Critical:** Resolved stdio deadlock when bash tool executes workflows
+- Fixed hanging workflows that call other MCP tools
+- Improved connection handling for nested tool execution
+
 ## [1.0.0] - 2026-01-02
 
-### Added
+### Added - Initial Release
 
-- Initial standalone release of bash MCP server
-- Persistent bash session management
-- Stdio transport for MCP communication
-- Network transport with IP whitelisting
-- Configurable command timeout
-- Automatic session restart capability
-- Comprehensive error handling and logging
-- Support for pipelines, environment variables, and redirects
-- GitHub Actions CI/CD workflows
-- Automated multi-platform binary builds
+#### Core Features
 
-### Features
+- **Persistent bash sessions** - Commands maintain state across executions
+- **Configurable timeouts** - Prevent hanging commands (default: 600 seconds)
+- **MCP protocol implementation** - Full Model Context Protocol support
+- **Stdio transport** - Integration with Claude Desktop
+- **Network mode** (optional) - TCP/IP connectivity with IP filtering
+- **Progress notifications** - Real-time command execution feedback
 
-- Execute bash commands in stateful session
-- Session state persists between calls
-- Support for cd, export, aliases
-- Background process handling
-- 120-second default timeout
-- Optional restart parameter
-- Network mode with security controls
-- Linux and macOS support (WSL for Windows users)
+#### Configuration
 
-### Security
+- JSON-based configuration file support
+- Timeout configuration
+- Network mode settings with IP allowlisting
+- Subnet-based access control
 
-- Runs with process-level permissions
-- No root access by default
-- Configurable timeout prevents runaway commands
-- IP whitelisting for network mode
-- Container isolation by default
-- Optional host access via nsenter
+#### Session Management
+
+- Persistent bash process across commands
+- Environment state preservation
+- Session restart capability
+- Working directory persistence
+
+#### Security
+
+- Stdio mode by default (no network exposure)
+- Optional network mode with IP filtering
+- Subnet-based access control
+- Configurable timeouts to prevent resource exhaustion
 
 ---
 
-## Release Types
+## Version History Summary
 
-### Major (x.0.0)
+| Version | Date       | Key Achievement                    |
+| ------- | ---------- | ---------------------------------- |
+| 1.1.0   | 2026-01-23 | **Nested MCP deadlock solved** 🎉  |
+| 1.0.0   | 2026-01-02 | Initial release with core features |
 
-- Breaking changes
-- Major feature additions
-- Architecture changes
+## Upgrading
 
-### Minor (0.x.0)
+### From 1.0.0 to 1.1.0
 
-- New features
-- Non-breaking enhancements
-- New capabilities
+**No breaking changes!** This is a backward-compatible enhancement.
 
-### Patch (0.0.x)
+**To get nested MCP support:**
 
-- Bug fixes
-- Documentation updates
-- Performance improvements
+1. Rebuild and deploy the bash server:
+   
+   ```bash
+   cd /media/laurie/Data/Github/mcp-bash-go
+   go build -o mcp-bash ./cmd/server
+   sudo cp mcp-bash /usr/local/bin/mcp-bash/mcp-bash
+   ```
 
-[Unreleased]: https://github.com/LaurieRhodes/mcp-bash-go/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/LaurieRhodes/mcp-bash-go/releases/tag/v1.0.0
+2. Configure skills server for Unix socket (add to Claude config):
+   
+   ```json
+   "skills": {
+     "command": "/path/to/mcp-cli",
+     "args": ["serve", "config.yaml"],
+     "env": {
+       "MCP_SOCKET_PATH": "/tmp/mcp-sockets/skills.sock"
+     }
+   }
+   ```
+
+3. Restart Claude Desktop
+
+4. Verify:
+   
+   ```bash
+   # Through Claude's bash tool:
+   env | grep MCP_NESTED
+   # Should output: MCP_NESTED=1
+   ```
+
+**Existing functionality continues to work exactly as before.**
+
+## Future Roadmap
+
+Planned features for future releases:
+
+- [ ] Multiple concurrent bash sessions
+- [ ] Shell selection (bash/zsh/fish)
+- [ ] Command history and logging
+- [ ] Output streaming for long-running commands
+- [ ] TLS support for network mode
+- [ ] Authentication for network mode
+- [ ] Multiple Unix socket support for multiple servers
+- [ ] Automatic socket cleanup on shutdown
+- [ ] Metrics and monitoring endpoints
+
+## Links
+
+- [Documentation](docs/README.md)
+- [Issue Tracker](https://github.com/LaurieRhodes/mcp-bash-go/issues)
+- [MCP Specification](https://modelcontextprotocol.io)

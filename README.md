@@ -1,221 +1,239 @@
-# Bash MCP Server
+# MCP Bash Server
 
-<div align="center">
+Bash command execution for Claude through the Model Context Protocol (MCP).
 
-![Model Context Protocol](https://img.shields.io/badge/MCP-Bash-blue)
-![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8?logo=go)
-![License](https://img.shields.io/badge/License-MIT-green)
-[![Release](https://img.shields.io/github/v/release/LaurieRhodes/mcp-bash-go)](https://github.com/LaurieRhodes/mcp-bash-go/releases)
+[![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8?style=flat&logo=go)](https://golang.org)
+[![CI Status](https://github.com/LaurieRhodes/mcp-bash-go/workflows/CI/badge.svg)](https://github.com/LaurieRhodes/mcp-bash-go/actions)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Latest Release](https://img.shields.io/github/v/release/LaurieRhodes/mcp-bash-go)](https://github.com/LaurieRhodes/mcp-bash-go/releases)
 
-</div>
+## Features
 
-## 🚀 Overview
+✅ **Persistent bash sessions** - Commands maintain state  
+✅ **Automatic timeout handling** - Configurable command timeouts  
+✅ **Nested MCP support** - Run workflows that call other MCP tools  
+✅ **Zero configuration** - Automatic environment injection  
+✅ **Secure Unix sockets** - Filesystem-based access control  
+✅ **Network mode (optional)** - TCP/IP with IP filtering  
+✅ **Multi-platform releases** - Pre-built binaries for Linux and macOS
 
-A Model Context Protocol (MCP) server implementation that provides bash command execution for AI models. Enables Large Language Models to execute bash commands in a persistent, stateful session with proper isolation and security controls.
+## Platform Support
 
-> ⚠️ **IMPORTANT SECURITY NOTICE**: This server executes arbitrary bash commands on your system. Only use it in trusted environments and with AI models you trust. Review all commands before execution in production environments.
+| Platform | Architecture          | Status      | Download                                                                      |
+| -------- | --------------------- | ----------- | ----------------------------------------------------------------------------- |
+| Linux    | x86_64 (amd64)        | ✅ Supported | [Latest Release](https://github.com/LaurieRhodes/mcp-bash-go/releases/latest) |
+| Linux    | ARM64                 | ✅ Supported | [Latest Release](https://github.com/LaurieRhodes/mcp-bash-go/releases/latest) |
+| macOS    | Intel (amd64)         | ✅ Supported | [Latest Release](https://github.com/LaurieRhodes/mcp-bash-go/releases/latest) |
+| macOS    | Apple Silicon (arm64) | ✅ Supported | [Latest Release](https://github.com/LaurieRhodes/mcp-bash-go/releases/latest) |
+| Windows  | Any                   | ❌ Use WSL   | Install Linux binary in WSL                                                   |
 
-This server addresses the issue where Claude Sonnet models have been trained to expect a `bash_tool` as part of Anthropic's computer use feature, but this tool is not available in standard Claude Desktop MCP environments.
+## Quick Start
 
-## 📥 Installation
+### Option 1: Download Pre-Built Binary (Recommended)
 
-### Download Pre-built Binaries
-
-Download the latest release for your platform from the [Releases page](https://github.com/LaurieRhodes/mcp-bash-go/releases).
-
-**Linux (x86_64)**:
+**Linux x86_64:**
 
 ```bash
+# Download latest release
 wget https://github.com/LaurieRhodes/mcp-bash-go/releases/latest/download/mcp-bash-linux-amd64
-chmod +x mcp-bash-linux-amd64
-sudo mkdir -p /usr/local/bin/mcp-servers/bash
-sudo mv mcp-bash-linux-amd64 /usr/local/bin/mcp-servers/bash/mcp-bash
 
-# Create default config file
-sudo tee /usr/local/bin/mcp-servers/bash/config.json > /dev/null <<'EOF'
+
+# Install
+sudo mkdir -p /usr/local/bin/mcp-bash
+sudo mv mcp-bash-linux-amd64 /usr/local/bin/mcp-bash/mcp-bash
+sudo chmod +x /usr/local/bin/mcp-bash/mcp-bash
+
+# Create config file
+sudo tee /usr/local/bin/mcp-bash/config.json > /dev/null <<'EOF'
 {
-  "commandTimeout": 120,
-  "enabled": true
+  "commandTimeout": 600
 }
 EOF
 ```
 
-**macOS (Apple Silicon)**:
+**macOS (Intel):**
+
+```bash
+wget https://github.com/LaurieRhodes/mcp-bash-go/releases/latest/download/mcp-bash-darwin-amd64
+sudo mkdir -p /usr/local/bin/mcp-bash
+sudo mv mcp-bash-darwin-amd64 /usr/local/bin/mcp-bash/mcp-bash
+sudo chmod +x /usr/local/bin/mcp-bash/mcp-bash
+sudo tee /usr/local/bin/mcp-bash/config.json > /dev/null <<'EOF'
+{
+  "commandTimeout": 600
+}
+EOF
+```
+
+**macOS (Apple Silicon):**
 
 ```bash
 wget https://github.com/LaurieRhodes/mcp-bash-go/releases/latest/download/mcp-bash-darwin-arm64
-chmod +x mcp-bash-darwin-arm64
-sudo mkdir -p /usr/local/bin/mcp-servers/bash
-sudo mv mcp-bash-darwin-arm64 /usr/local/bin/mcp-servers/bash/mcp-bash
-
-# Create default config file
-sudo tee /usr/local/bin/mcp-servers/bash/config.json > /dev/null <<'EOF'
+sudo mkdir -p /usr/local/bin/mcp-bash
+sudo mv mcp-bash-darwin-arm64 /usr/local/bin/mcp-bash/mcp-bash
+sudo chmod +x /usr/local/bin/mcp-bash/mcp-bash
+sudo tee /usr/local/bin/mcp-bash/config.json > /dev/null <<'EOF'
 {
-  "commandTimeout": 120,
-  "enabled": true
+  "commandTimeout": 600
 }
 EOF
 ```
 
-**Windows**: Not supported natively (no bash). Use WSL (Windows Subsystem for Linux) and install the Linux binary.
+### Option 2: Build from Source
 
-### Building from Source
+**Prerequisites:** Go 1.21 or later
 
 ```bash
+# Clone repository
 git clone https://github.com/LaurieRhodes/mcp-bash-go.git
 cd mcp-bash-go
+
+# Build
 go build -o mcp-bash ./cmd/server
+
+# Deploy
+sudo mkdir -p /usr/local/bin/mcp-bash
+sudo cp mcp-bash /usr/local/bin/mcp-bash/mcp-bash
+
+# Create config
+sudo tee /usr/local/bin/mcp-bash/config.json > /dev/null <<'EOF'
+{
+  "commandTimeout": 600
+}
+EOF
 ```
 
-## ⚙️ Configuration
+### Configure Claude Desktop (or other MCP Client)
 
-The server requires a `config.json` file in the same directory as the executable.
-
-**Minimal Configuration**:
+Add to `~/.config/Claude/claude_desktop_config.json`:
 
 ```json
 {
-  "commandTimeout": 120,
-  "enabled": true
+  "mcpServers": {
+    "bash": {
+      "command": "/usr/local/bin/mcp-bash/mcp-bash"
+    }
+  }
 }
 ```
 
-**Configuration Options**:
+### Restart Claude Desktop
 
-- `commandTimeout`: Maximum execution time in seconds (default: 120)
-- `enabled`: Set to false to disable the bash tool entirely
+Close and reopen Claude Desktop to load the bash server.
 
-### Network Mode (Advanced)
+### Verify Installation
 
-For network-based MCP communication, see `config.network.json` example:
+```bash
+# Check version
+/usr/local/bin/mcp-bash/mcp-bash --version
+
+# Through Claude's bash tool:
+# "Run: echo 'Hello from bash!'"
+```
+
+## Documentation
+
+📖 **[Full Documentation](docs/README.md)**
+
+- [Quick Start Guide](docs/quickstart.md) - Get running in 5 minutes
+- [Architecture Overview](docs/architecture.md) - System design and components
+- [Nested MCP Solution](docs/nested-mcp.md) - How we solved the deadlock problem
+- [Troubleshooting Guide](docs/troubleshooting.md) - Common issues and solutions
+
+The Nested MCP Problem (Solved!)
+
+**Problem:** When Claude used the bash tool to execute workflows that called other MCP tools, both tried to use stdin/stdout simultaneously, causing a deadlock.
+
+**Solution:** Automatic environment injection + Unix socket fallback.
+
+```
+Claude Desktop
+  ↓ [stdio]
+Bash Server (sets MCP_NESTED=1)
+  ↓ [executes workflow]
+mcp-cli (detects nested context)
+  ↓ [uses Unix socket instead]
+Skills Server
+  ✓ No conflict!
+```
+
+**Result:** Workflows complete in ~46 seconds instead of hanging indefinitely.
+
+See [Nested MCP Documentation](docs/nested-mcp.md) for details.
+
+## Configuration
+
+### Timeout (Optional)
+
+Create `/usr/local/bin/mcp-bash/config.json`:
 
 ```json
 {
-  "commandTimeout": 120,
-  "enabled": true,
+  "commandTimeout": 1800
+}
+```
+
+Default: 600 seconds (10 minutes)
+
+### Network Mode (Advanced)
+
+```json
+{
+  "commandTimeout": 600,
   "network": {
     "enabled": true,
-    "host": "localhost",
-    "port": 3000,
+    "host": "127.0.0.1",
+    "port": 8080,
     "allowedIPs": ["127.0.0.1"],
     "allowedSubnets": ["192.168.1.0/24"]
   }
 }
 ```
 
-## 🔧 MCP Client Configuration
+**Warning:** Network mode exposes bash execution over TCP/IP. Use IP filtering - unauthenticated!
 
-### Claude Desktop
-
-Edit your Claude Desktop configuration file:
-
-**Linux/macOS**: `~/.config/Claude/claude_desktop_config.json`
-**Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
-
-```json
-{
-  "mcpServers": {
-    "bash": {
-      "command": "/usr/local/bin/mcp-servers/bash/mcp-bash"
-    }
-  }
-}
-```
-
-### Other MCP Clients
-
-Point your MCP client to the bash server binary. The server communicates via stdio by default.
-
-## 🧰 Available Tool
-
-### bash
-
-Execute bash commands in a persistent session.
-
-| Parameter | Required | Type    | Description                              |
-| --------- | -------- | ------- | ---------------------------------------- |
-| command   | Yes      | string  | The bash command to execute              |
-| restart   | No       | boolean | Set to true to restart the session first |
-
-**Supported Features**:
-
-- Pipelines: `ls | grep pattern`
-- Command chaining: `cd /tmp && ls -la`
-- Environment variables: `export VAR=value`
-- Background processes: `sleep 10 &`
-- File I/O redirection: `echo "text" > file.txt`
-- Command substitution: `echo $(date)`
-- Conditional execution: `test -f file && cat file`
-
-**Unsupported Features**:
-
-- Interactive commands: `vim`, `less`, `top`
-- Commands requiring user input
-- `sudo` without NOPASSWD configuration
-
-## 🔒 Security Considerations
-
-**Security Features**:
-
-- ✅ Commands run with server process permissions only
-- ✅ No sudo/root access by default
-- ✅ Configurable timeout prevents infinite loops
-- ✅ Session can be restarted if needed
-- ✅ Optional IP whitelisting for network mode
-
-**Security Risks**:
-
-- ❌ No command whitelisting
-- ❌ No sandboxing
-- ❌ Executes arbitrary commands from AI
-
-**Best Practices**:
-
-- Run with minimal necessary permissions
-- Use in development/testing environments
-- Review AI-generated commands before production use
-- Use Docker/VMs for additional isolation
-- Monitor logs for unexpected commands
-
-## 📊 Architecture
+## Project Structure
 
 ```
 mcp-bash-go/
-├── cmd/server/          # Server entry point
+├── .github/
+│   └── workflows/
+│       ├── ci.yml          # Automated testing & linting
+│       └── release.yml     # Multi-platform binary builds
+├── cmd/server/             # Main server entry point
 ├── pkg/
-│   ├── bash/            # Bash session management
-│   ├── mcp/             # MCP protocol implementation
-│   │   ├── types.go     # Type definitions
-│   │   ├── server.go    # Server logic
-│   │   ├── transport.go # Stdio transport
-│   │   └── network_transport.go  # Network transport
-│   └── config/          # Configuration management
-└── .github/workflows/   # CI/CD automation
+│   ├── bash/              # Bash execution and environment injection
+│   ├── config/            # Configuration management
+│   ├── env/               # Environment variable handling
+│   └── mcp/               # MCP protocol implementation
+├── docs/                  # Documentation
+│   ├── README.md          # Documentation index
+│   ├── architecture.md    # System design
+├── config.json            # Default configuration
+├── config.network.json    # Network mode example
+├── CHANGELOG.md           # Version history
+└── LICENSE                # MIT license
 ```
 
-## 📚 Related Documentation
 
-- [Anthropic Bash Tool Documentation](https://docs.claude.com/en/docs/agents-and-tools/tool-use/bash-tool)
-- [Model Context Protocol](https://modelcontextprotocol.io/)
-- [GitHub Issue #4027](https://github.com/cline/cline/issues/4027)
 
-## 📜 License
+[![CI Status](https://github.com/LaurieRhodes/mcp-bash-go/workflows/CI/badge.svg)](https://github.com/LaurieRhodes/mcp-bash-go/actions)
+
+## License
 
 MIT License - see [LICENSE](LICENSE) file for details.
 
-## 👏 Attribution
+## Acknowledgments
 
-Addresses community-identified gaps in Claude Desktop's MCP tool availability, specifically the missing `bash_tool` that Claude models have been trained to use.
+- [Model Context Protocol](https://modelcontextprotocol.io) - MCP specification
+- [Anthropic](https://anthropic.com) - Claude Desktop and MCP ecosystem
 
-## ⚠️ Disclaimer
+## Support
 
-This tool executes arbitrary bash commands. Use responsibly and only in trusted environments. The authors are not responsible for any damage caused by misuse of this tool.
-
-## 🤝 Contributing
-
-Contributions welcome! Please open an issue or pull request.
+- **Documentation:** [docs/](docs/)
+- **Issues:** https://github.com/LaurieRhodes/mcp-bash-go/issues
+- **Discussions:** https://github.com/LaurieRhodes/mcp-bash-go/discussions
 
 ---
 
-**Platform**: Linux, macOS (use WSL on Windows)  
-**Status**: Production Ready
+**Made with ❤️ for the MCP community**

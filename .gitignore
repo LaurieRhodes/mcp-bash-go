@@ -3,3 +3,4 @@ mcp-bash-go
 mcp-bash
 *.log
 config.json
+CLAUDE_SUMMARIES/*
