@@ -13,6 +13,17 @@ import (
 	"time"
 )
 
+const (
+	// MaxScannerBufferSize is the maximum size for the bufio.Scanner buffer.
+	// Default bufio.Scanner limit is 64KB which can be exceeded by commands
+	// producing long output lines (e.g., raw JSON from APIs).
+	MaxScannerBufferSize = 1024 * 1024 // 1MB
+
+	// MaxOutputSize is the maximum size of captured command output.
+	// Prevents unbounded memory growth from commands producing huge output.
+	MaxOutputSize = 512 * 1024 // 512KB
+)
+
 // BashSession represents a persistent bash session
 type BashSession struct {
 	cmd          *exec.Cmd
@@ -24,6 +35,13 @@ type BashSession struct {
 	running      bool
 	workingDir   string
 	timeout      time.Duration
+
+	// stderrBuf holds accumulated stderr output between commands.
+	// A single persistent goroutine drains stderr into this buffer,
+	// avoiding the goroutine-per-execute leak.
+	stderrBuf   strings.Builder
+	stderrMutex sync.Mutex
+	stderrDone  chan struct{} // closed when stderr drainer goroutine exits
 }
 
 // BashManager manages bash sessions
@@ -49,8 +67,16 @@ func (bm *BashManager) ExecuteCommand(command string) (string, error) {
 	bm.sessionMutex.Lock()
 	defer bm.sessionMutex.Unlock()
 
-	// Create session if it doesn't exist
+	// Create session if it doesn't exist or is dead
 	if bm.session == nil || !bm.session.running {
+		// FIX: Clean up the old session before creating a new one.
+		// Previously, createSession() silently overwrote bm.session,
+		// leaving the old bash process running as an orphan.
+		if bm.session != nil {
+			fmt.Fprintf(os.Stderr, "Cleaning up dead session before creating new one (PID: %d)\n",
+				bm.session.getPID())
+			bm.session.close()
+		}
 		if err := bm.createSession(); err != nil {
 			return "", fmt.Errorf("failed to create bash session: %w", err)
 		}
@@ -76,22 +102,23 @@ func (bm *BashManager) RestartSession() error {
 // createSession creates a new bash session
 func (bm *BashManager) createSession() error {
 	session := &BashSession{
-		timeout: bm.defaultTimeout,
-		running: true,
+		timeout:    bm.defaultTimeout,
+		running:    true,
+		stderrDone: make(chan struct{}),
 	}
 
 	// Create the bash command
 	session.cmd = exec.Command("bash")
-	
+
 	// NESTED MCP SUPPORT: Set environment variables for child processes
 	// This allows mcp-cli to detect nested execution and use Unix sockets
 	socketDir := "/tmp/mcp-sockets"
 	os.MkdirAll(socketDir, 0700) // Create socket directory with restrictive permissions
-	
+
 	session.cmd.Env = append(os.Environ(),
-		"MCP_NESTED=1",                           // Signal nested MCP execution
-		"MCP_SOCKET_DIR="+socketDir,               // Unix socket directory
-		"MCP_SKILLS_SOCKET="+socketDir+"/skills.sock", // Skills server socket path
+		"MCP_NESTED=1",                                // Signal nested MCP execution
+		"MCP_SOCKET_DIR="+socketDir,                    // Unix socket directory
+		"MCP_SKILLS_SOCKET="+socketDir+"/skills.sock",  // Skills server socket path
 	)
 
 	// Get stdin/stdout/stderr pipes
@@ -116,8 +143,57 @@ func (bm *BashManager) createSession() error {
 		return fmt.Errorf("failed to start bash: %w", err)
 	}
 
+	fmt.Fprintf(os.Stderr, "Created new bash session (PID: %d)\n", session.cmd.Process.Pid)
+
+	// FIX: Start a single persistent stderr drainer goroutine per session.
+	// Previously, execute() spawned a new goroutine per command that competed
+	// to read from the same stderr pipe and never terminated, leaking goroutines
+	// and causing data races.
+	go session.drainStderr()
+
 	bm.session = session
 	return nil
+}
+
+// drainStderr continuously reads stderr from the bash process into a buffer.
+// This single goroutine replaces the per-execute goroutine that was leaking.
+func (bs *BashSession) drainStderr() {
+	defer close(bs.stderrDone)
+
+	scanner := bufio.NewScanner(bs.stderr)
+	scanner.Buffer(make([]byte, 0, 64*1024), MaxScannerBufferSize)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		bs.stderrMutex.Lock()
+		// Cap stderr buffer to prevent unbounded growth
+		if bs.stderrBuf.Len() < MaxOutputSize {
+			bs.stderrBuf.WriteString(line)
+			bs.stderrBuf.WriteString("\n")
+		}
+		bs.stderrMutex.Unlock()
+	}
+
+	if err := scanner.Err(); err != nil {
+		fmt.Fprintf(os.Stderr, "Stderr drainer error: %v\n", err)
+	}
+}
+
+// consumeStderr returns and clears the accumulated stderr output.
+func (bs *BashSession) consumeStderr() string {
+	bs.stderrMutex.Lock()
+	defer bs.stderrMutex.Unlock()
+	s := bs.stderrBuf.String()
+	bs.stderrBuf.Reset()
+	return s
+}
+
+// getPID returns the process ID of the bash session, or 0 if not available.
+func (bs *BashSession) getPID() int {
+	if bs.cmd != nil && bs.cmd.Process != nil {
+		return bs.cmd.Process.Pid
+	}
+	return 0
 }
 
 // execute runs a command in the bash session
@@ -129,9 +205,12 @@ func (bs *BashSession) execute(command string, timeout time.Duration) (string, e
 		return "", fmt.Errorf("bash session is not running")
 	}
 
+	// Clear any accumulated stderr from previous commands
+	bs.consumeStderr()
+
 	// Create a unique marker for command completion
 	marker := fmt.Sprintf("__BASH_CMD_DONE_%d__", time.Now().UnixNano())
-	
+
 	// Construct command with marker and error capture
 	fullCommand := fmt.Sprintf("%s\necho '%s'$?\n", command, marker)
 
@@ -145,17 +224,22 @@ func (bs *BashSession) execute(command string, timeout time.Duration) (string, e
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	// Read output
+	// Read stdout until we see the completion marker
 	outputChan := make(chan string, 1)
 	errorChan := make(chan error, 1)
 
 	go func() {
 		var output strings.Builder
+		truncated := false
 		scanner := bufio.NewScanner(bs.stdout)
-		
+		// FIX: Increase scanner buffer to handle long output lines.
+		// Default 64KB limit caused "token too long" errors with large
+		// JSON output from commands like curl piped through python3.
+		scanner.Buffer(make([]byte, 0, 64*1024), MaxScannerBufferSize)
+
 		for scanner.Scan() {
 			line := scanner.Text()
-			
+
 			// Check if this is our completion marker
 			if strings.HasPrefix(line, marker) {
 				// Extract exit code
@@ -166,29 +250,23 @@ func (bs *BashSession) execute(command string, timeout time.Duration) (string, e
 				outputChan <- output.String()
 				return
 			}
-			
-			output.WriteString(line)
-			output.WriteString("\n")
+
+			// FIX: Cap output size to prevent unbounded memory growth
+			if !truncated && output.Len() < MaxOutputSize {
+				output.WriteString(line)
+				output.WriteString("\n")
+			} else if !truncated {
+				truncated = true
+				output.WriteString(fmt.Sprintf("\n... [output truncated at %d bytes] ...\n", MaxOutputSize))
+			}
 		}
-		
+
 		if err := scanner.Err(); err != nil {
 			errorChan <- err
+			return
 		}
-	}()
-
-	// Also capture stderr
-	stderrChan := make(chan string, 1)
-	go func() {
-		var stderr strings.Builder
-		scanner := bufio.NewScanner(bs.stderr)
-		
-		// Read stderr with a short buffer
-		for scanner.Scan() {
-			stderr.WriteString(scanner.Text())
-			stderr.WriteString("\n")
-		}
-		
-		stderrChan <- stderr.String()
+		// Scanner finished without finding marker — pipe was closed
+		errorChan <- fmt.Errorf("stdout closed before command completion marker was received")
 	}()
 
 	// Wait for completion or timeout
@@ -202,33 +280,30 @@ func (bs *BashSession) execute(command string, timeout time.Duration) (string, e
 	case output := <-outputChan:
 		// Trim trailing newline
 		output = strings.TrimRight(output, "\n")
-		
-		// Check if there's stderr output (non-blocking)
-		select {
-		case stderrOutput := <-stderrChan:
-			if stderrOutput != "" {
-				output = output + "\n\nSTDERR:\n" + stderrOutput
-			}
-		case <-time.After(100 * time.Millisecond):
-			// No stderr available yet, that's OK
+
+		// Give stderr a brief moment to flush, then collect it
+		time.Sleep(50 * time.Millisecond)
+		stderrOutput := bs.consumeStderr()
+		if stderrOutput != "" {
+			output = output + "\n\nSTDERR:\n" + stderrOutput
 		}
-		
+
 		return output, nil
 	}
 }
 
-// close closes the bash session
+// close closes the bash session and kills the process.
+// Safe to call multiple times and on sessions where running is already false.
 func (bs *BashSession) close() {
 	bs.mutex.Lock()
 	defer bs.mutex.Unlock()
 
-	if !bs.running {
-		return
-	}
-
+	wasRunning := bs.running
 	bs.running = false
 
-	// Close pipes
+	pid := bs.getPID()
+
+	// Close pipes — this will also unblock the stderr drainer goroutine
 	if bs.stdin != nil {
 		bs.stdin.Close()
 	}
@@ -243,6 +318,21 @@ func (bs *BashSession) close() {
 	if bs.cmd != nil && bs.cmd.Process != nil {
 		bs.cmd.Process.Kill()
 		bs.cmd.Wait()
+	}
+
+	// Wait for the stderr drainer to finish (with a timeout to avoid hanging)
+	if bs.stderrDone != nil {
+		select {
+		case <-bs.stderrDone:
+		case <-time.After(2 * time.Second):
+			fmt.Fprintf(os.Stderr, "Warning: stderr drainer did not exit within timeout\n")
+		}
+	}
+
+	if wasRunning {
+		fmt.Fprintf(os.Stderr, "Closed bash session (PID: %d)\n", pid)
+	} else {
+		fmt.Fprintf(os.Stderr, "Cleaned up dead bash session (PID: %d)\n", pid)
 	}
 }
 

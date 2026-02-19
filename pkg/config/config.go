@@ -9,7 +9,10 @@ import (
 	"time"
 )
 
-// NetworkConfig holds network-specific configuration
+// NetworkConfig holds network-specific configuration.
+// This is an advanced capability with security implications and is not
+// included in the default configuration. See config.network.json for
+// an example of how to enable network mode.
 type NetworkConfig struct {
 	Enabled        bool     `json:"enabled"`
 	Host           string   `json:"host"`
@@ -20,9 +23,9 @@ type NetworkConfig struct {
 
 // Config holds the application configuration
 type Config struct {
-	CommandTimeout int           `json:"commandTimeout"` // in seconds
-	Enabled        bool          `json:"enabled"`
-	Network        NetworkConfig `json:"network"`
+	CommandTimeout int            `json:"commandTimeout"` // in seconds
+	Enabled        bool           `json:"enabled"`
+	Network        *NetworkConfig `json:"network,omitempty"`
 }
 
 // Default config file name
@@ -52,7 +55,7 @@ func LoadConfig() (*Config, error) {
 		if err == nil {
 			cwdConfigPath := filepath.Join(cwd, configFileName)
 			fmt.Fprintf(os.Stderr, "Config not found in executable directory, checking current directory: %s\n", cwdConfigPath)
-			
+
 			if _, err := os.Stat(cwdConfigPath); err == nil {
 				configFilePath = cwdConfigPath
 				fmt.Fprintf(os.Stderr, "Found config file in current directory\n")
@@ -89,17 +92,23 @@ func LoadConfig() (*Config, error) {
 		config.CommandTimeout = 600 // default 10 minutes - allows longer workflows
 	}
 
-	// Set network defaults if not specified
-	if config.Network.Host == "" {
-		config.Network.Host = "localhost"
-	}
-	if config.Network.Port == 0 {
-		config.Network.Port = 3000
+	// Set network defaults only when network mode is explicitly configured
+	if config.Network != nil && config.Network.Enabled {
+		if config.Network.Host == "" {
+			config.Network.Host = "localhost"
+		}
+		if config.Network.Port == 0 {
+			config.Network.Port = 3000
+		}
 	}
 
 	fmt.Fprintf(os.Stderr, "Configuration loaded successfully\n")
 	fmt.Fprintf(os.Stderr, "Command timeout: %d seconds\n", config.CommandTimeout)
-	fmt.Fprintf(os.Stderr, "Network mode: %v\n", config.Network.Enabled)
+	if config.Network != nil && config.Network.Enabled {
+		fmt.Fprintf(os.Stderr, "Network mode: enabled (%s:%d)\n", config.Network.Host, config.Network.Port)
+	} else {
+		fmt.Fprintf(os.Stderr, "Network mode: disabled (stdio only)\n")
+	}
 	return config, nil
 }
 
@@ -108,11 +117,21 @@ func (c *Config) GetTimeout() time.Duration {
 	return time.Duration(c.CommandTimeout) * time.Second
 }
 
-// createDefaultConfig creates a default config file
+// IsNetworkEnabled returns true if network mode is explicitly enabled
+func (c *Config) IsNetworkEnabled() bool {
+	return c.Network != nil && c.Network.Enabled
+}
+
+// createDefaultConfig creates a default config file.
+// The default config uses stdio mode only — network configuration
+// is intentionally excluded for security. Users who need network
+// mode should refer to config.network.json for an example.
 func createDefaultConfig(configFilePath string) (*Config, error) {
 	config := &Config{
 		CommandTimeout: 600, // 10 minutes - allows longer workflows without progress notifications
 		Enabled:        true,
+		// Network is intentionally nil — not included in default config.
+		// See config.network.json for network mode configuration.
 	}
 
 	// Convert config to JSON
@@ -136,11 +155,11 @@ func getExecutablePath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	
+
 	realPath, err := filepath.EvalSymlinks(execPath)
 	if err != nil {
 		realPath = execPath
 	}
-	
+
 	return filepath.Dir(realPath), nil
 }

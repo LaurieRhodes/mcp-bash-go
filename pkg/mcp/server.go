@@ -147,8 +147,15 @@ func (s *Server) handleRequest(data []byte) ([]byte, error) {
 		fmt.Fprintf(os.Stderr, "Error marshaling response: %v\n", err)
 		return nil, err
 	}
-	
-	fmt.Fprintf(os.Stderr, "Response: %s\n", string(responseBytes))
+
+	// Log truncated response to avoid flooding stderr with large command output
+	// (e.g., pretty-printed JSON from API queries)
+	const maxLogLen = 500
+	if len(responseBytes) > maxLogLen {
+		fmt.Fprintf(os.Stderr, "Response (%d bytes): %s...[truncated]\n", len(responseBytes), string(responseBytes[:maxLogLen]))
+	} else {
+		fmt.Fprintf(os.Stderr, "Response: %s\n", string(responseBytes))
+	}
 	return responseBytes, nil
 }
 

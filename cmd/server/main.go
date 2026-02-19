@@ -66,7 +66,7 @@ func main() {
 	// Choose transport based on configuration
 	var transport mcp.Transport
 	
-	if cfg.Network.Enabled {
+	if cfg.IsNetworkEnabled() {
 		// Network mode
 		fmt.Fprintf(os.Stderr, "Starting in NETWORK mode on %s:%d\n", cfg.Network.Host, cfg.Network.Port)
 		

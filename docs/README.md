@@ -20,6 +20,12 @@ The MCP Bash Server provides command execution capabilities through the Model Co
 - [Configuration Guide](configuration.md) - Timeout and network settings
 - [Troubleshooting](troubleshooting.md) - Common issues and solutions
 
+## Claude Skill (claude.ai)
+
+Claude.ai provides both a built-in sandboxed bash and any MCP bash tools you configure. By default, Claude prefers the sandbox, which runs in an isolated container with no access to your real filesystem. The `claude-skill/bash-preference.zip` skill overrides this so all bash commands are routed through the MCP server.
+
+**To deploy:** In claude.ai, go to **Settings → Profile → Claude Skills** and upload the zip file. The skill takes effect immediately for new conversations.
+
 ## Installation
 
 **Prerequisites:**
@@ -129,6 +135,7 @@ mcp-bash-go/
 ├── .github/workflows/   # CI/CD automation
 │   ├── ci.yml          # Testing, linting, coverage
 │   └── release.yml     # Multi-platform builds
+├── claude-skill/       # Skill to prefer MCP bash over sandbox
 ├── cmd/server/         # Main entry point
 ├── pkg/
 │   ├── bash/          # Bash execution + env injection

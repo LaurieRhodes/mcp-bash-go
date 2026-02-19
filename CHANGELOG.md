@@ -5,144 +5,46 @@ All notable changes to the MCP Bash Server will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.1.0] - 2026-01-23
-
-### Added - Nested MCP Solution
-
-This release solves the critical nested MCP deadlock problem that prevented workflows from executing when called through the bash tool.
-
-#### New Features
-
-- **Automatic environment injection** in bash command execution
-  
-  - `MCP_NESTED=1` - Signals nested MCP context
-  - `MCP_SOCKET_DIR=/tmp/mcp-sockets` - Socket directory location
-  - `MCP_SKILLS_SOCKET=/tmp/mcp-sockets/skills.sock` - Specific socket path
-
-- **Unix socket support** for nested MCP communication
-  
-  - Avoids stdio conflicts when multiple MCP tools interact
-  - Secure filesystem-based permissions (0600)
-  - Dual-mode operation (stdio + Unix socket simultaneously)
-
-- **Auto-detection in workflow execution**
-  
-  - mcp-cli automatically detects `MCP_NESTED=1`
-  - Switches from stdio to Unix socket when appropriate
-  - Falls back to stdio if socket unavailable
-
-# 
-
-### Changed
-
-- Enhanced bash command execution to support nested MCP scenarios
-- Improved error handling for tool execution in nested contexts
+## [1.1.1] - 2026-02-20
 
 ### Fixed
 
-- **Critical:** Resolved stdio deadlock when bash tool executes workflows
-- Fixed hanging workflows that call other MCP tools
-- Improved connection handling for nested tool execution
+- **Orphaned bash processes** - Dead sessions are now explicitly closed before creating replacements. Previously, when a session died (timeout, pipe error), the next command silently created a new bash process without killing the old one, leaking a process on every retry.
+- **Stderr goroutine leak and data race** - Replaced per-command stderr goroutine with a single persistent drainer per session. Each `execute()` call previously spawned a new goroutine reading from the same stderr pipe; these never terminated and raced on the shared reader.
+- **Scanner buffer overflow on large output** - Increased `bufio.Scanner` buffer from the default 64KB to 1MB. Commands producing long output lines (e.g., raw JSON from API responses) triggered `token too long` errors that killed the session.
+- **Session close idempotency** - `close()` now always proceeds to kill the process and clean up pipes, even when `running` is already false. Previously it returned early, leaving dead processes unkillable.
+- **Unbounded output memory growth** - Command output is now capped at 512KB with a clear truncation message.
+- **Verbose debug logging** - Response and request payloads in stderr logs are now truncated to prevent flooding when commands return large output.
+
+### Changed
+
+- **Default config no longer includes network settings** - The auto-generated `config.json` now contains only `commandTimeout` and `enabled`. Network mode configuration is intentionally omitted to avoid exposing an unauthenticated TCP listener by default. See `config.network.json` for an example of how to enable it.
+- `Config.Network` is now a pointer field (`*NetworkConfig`) with `omitempty`, so it is absent from serialised JSON when not configured.
+
+### Added
+
+- **Claude skill** (`claude-skill/bash-preference.zip`) - Instructs claude.ai to route all bash execution through the MCP server instead of its built-in sandbox. See README for deployment steps.
+
+## [1.1.0] - 2026-01-23
+
+### Added
+
+- **Automatic environment injection** for nested MCP support
+  - `MCP_NESTED=1` signals nested MCP context
+  - `MCP_SOCKET_DIR` and `MCP_SKILLS_SOCKET` for Unix socket communication
+- **Unix socket support** for nested MCP communication avoiding stdio conflicts
+
+### Fixed
+
+- **Critical:** Resolved stdio deadlock when bash tool executes workflows that call other MCP tools
 
 ## [1.0.0] - 2026-01-02
 
-### Added - Initial Release
+### Added
 
-#### Core Features
-
-- **Persistent bash sessions** - Commands maintain state across executions
-- **Configurable timeouts** - Prevent hanging commands (default: 600 seconds)
-- **MCP protocol implementation** - Full Model Context Protocol support
-- **Stdio transport** - Integration with Claude Desktop
-- **Network mode** (optional) - TCP/IP connectivity with IP filtering
-- **Progress notifications** - Real-time command execution feedback
-
-#### Configuration
-
-- JSON-based configuration file support
-- Timeout configuration
-- Network mode settings with IP allowlisting
-- Subnet-based access control
-
-#### Session Management
-
-- Persistent bash process across commands
-- Environment state preservation
+- Persistent bash sessions with state across executions
+- Configurable command timeouts (default: 600 seconds)
+- Full MCP protocol implementation with stdio transport
+- Optional network mode with IP and subnet filtering
+- JSON-based configuration with auto-generation of defaults
 - Session restart capability
-- Working directory persistence
-
-#### Security
-
-- Stdio mode by default (no network exposure)
-- Optional network mode with IP filtering
-- Subnet-based access control
-- Configurable timeouts to prevent resource exhaustion
-
----
-
-## Version History Summary
-
-| Version | Date       | Key Achievement                    |
-| ------- | ---------- | ---------------------------------- |
-| 1.1.0   | 2026-01-23 | **Nested MCP deadlock solved** 🎉  |
-| 1.0.0   | 2026-01-02 | Initial release with core features |
-
-## Upgrading
-
-### From 1.0.0 to 1.1.0
-
-**No breaking changes!** This is a backward-compatible enhancement.
-
-**To get nested MCP support:**
-
-1. Rebuild and deploy the bash server:
-   
-   ```bash
-   cd /media/laurie/Data/Github/mcp-bash-go
-   go build -o mcp-bash ./cmd/server
-   sudo cp mcp-bash /usr/local/bin/mcp-bash/mcp-bash
-   ```
-
-2. Configure skills server for Unix socket (add to Claude config):
-   
-   ```json
-   "skills": {
-     "command": "/path/to/mcp-cli",
-     "args": ["serve", "config.yaml"],
-     "env": {
-       "MCP_SOCKET_PATH": "/tmp/mcp-sockets/skills.sock"
-     }
-   }
-   ```
-
-3. Restart Claude Desktop
-
-4. Verify:
-   
-   ```bash
-   # Through Claude's bash tool:
-   env | grep MCP_NESTED
-   # Should output: MCP_NESTED=1
-   ```
-
-**Existing functionality continues to work exactly as before.**
-
-## Future Roadmap
-
-Planned features for future releases:
-
-- [ ] Multiple concurrent bash sessions
-- [ ] Shell selection (bash/zsh/fish)
-- [ ] Command history and logging
-- [ ] Output streaming for long-running commands
-- [ ] TLS support for network mode
-- [ ] Authentication for network mode
-- [ ] Multiple Unix socket support for multiple servers
-- [ ] Automatic socket cleanup on shutdown
-- [ ] Metrics and monitoring endpoints
-
-## Links
-
-- [Documentation](docs/README.md)
-- [Issue Tracker](https://github.com/LaurieRhodes/mcp-bash-go/issues)
-- [MCP Specification](https://modelcontextprotocol.io)

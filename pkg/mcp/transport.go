@@ -96,7 +96,13 @@ func (t *StdioTransport) processRequests(handler RequestHandlerFunc) {
 				continue
 			}
 			
-			fmt.Fprintf(os.Stderr, "Received message: %s\n", line)
+			// Log received message (truncated for large payloads)
+			const maxMsgLog = 200
+			if len(line) > maxMsgLog {
+				fmt.Fprintf(os.Stderr, "Received message (%d bytes): %s...[truncated]\n", len(line), line[:maxMsgLog])
+			} else {
+				fmt.Fprintf(os.Stderr, "Received message: %s\n", line)
+			}
 
 			// Process the request
 			response, err := handler([]byte(line))
@@ -113,7 +119,7 @@ func (t *StdioTransport) processRequests(handler RequestHandlerFunc) {
 			// Add newline to the response
 			response = append(response, '\n')
 
-			fmt.Fprintf(os.Stderr, "Sending response: %s", string(response))
+			fmt.Fprintf(os.Stderr, "Sending response (%d bytes)\n", len(response))
 
 			// Write the response
 			_, err = t.writer.Write(response)

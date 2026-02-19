@@ -117,6 +117,16 @@ Add to `~/.config/Claude/claude_desktop_config.json`:
 }
 ```
 
+### Install the Claude Skill (claude.ai)
+
+When using this MCP server with claude.ai, Claude has access to both its built-in sandboxed bash **and** the MCP bash tool. Without guidance, Claude defaults to the sandbox — which runs in an isolated container with no access to your real filesystem. The included Claude skill overrides this behaviour so that all bash execution is routed through the MCP server.
+
+1. In claude.ai, navigate to **Settings → Profile → Claude Skills**
+2. Upload `claude-skill/bash-preference.zip`
+3. The skill takes effect immediately for new conversations
+
+Without this skill, commands like `ls /home` will silently run inside a throwaway container instead of on your machine.
+
 ### Restart Claude Desktop
 
 Close and reopen Claude Desktop to load the bash server.
@@ -200,6 +210,8 @@ mcp-bash-go/
 │   └── workflows/
 │       ├── ci.yml          # Automated testing & linting
 │       └── release.yml     # Multi-platform binary builds
+├── claude-skill/          # Claude skill to prefer MCP bash over sandbox
+│   └── bash-preference.zip
 ├── cmd/server/             # Main server entry point
 ├── pkg/
 │   ├── bash/              # Bash execution and environment injection
