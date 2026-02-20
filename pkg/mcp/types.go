@@ -29,10 +29,12 @@ func (r *RequestID) UnmarshalJSON(data []byte) error {
 	return nil // ID can be omitted in notifications
 }
 
-// MarshalJSON implements custom marshaling for RequestID
+// MarshalJSON implements custom marshaling for RequestID.
+// Returns an error if value is nil to prevent emitting "null" which violates
+// the MCP/JSON-RPC 2.0 spec (id must be string or number, never null).
 func (r RequestID) MarshalJSON() ([]byte, error) {
 	if r.value == nil {
-		return []byte("null"), nil
+		return nil, fmt.Errorf("cannot marshal nil RequestID: would produce 'null' which violates JSON-RPC 2.0 spec")
 	}
 	return json.Marshal(r.value)
 }

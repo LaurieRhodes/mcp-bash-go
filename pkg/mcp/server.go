@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 )
 
@@ -83,6 +84,15 @@ func (s *Server) handleRequest(data []byte) ([]byte, error) {
 	if request.Method == "initialized" {
 		fmt.Fprintf(os.Stderr, "Received initialized notification (legacy format), setting server as ready\n")
 		s.initialized = true
+		return nil, nil
+	}
+
+	// Handle ALL other notifications — per JSON-RPC 2.0, servers MUST NOT reply to notifications.
+	// Notifications are messages without an "id" field; by convention their method names
+	// start with "notifications/". Sending a response with a nil id causes MCP clients
+	// (e.g. Claude Desktop) to reject the malformed message and corrupt the session.
+	if strings.HasPrefix(request.Method, "notifications/") {
+		fmt.Fprintf(os.Stderr, "Received notification: %s (no response sent per JSON-RPC 2.0 spec)\n", request.Method)
 		return nil, nil
 	}
 
