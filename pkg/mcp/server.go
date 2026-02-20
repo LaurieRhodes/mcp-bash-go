@@ -8,23 +8,28 @@ import (
 	"sync"
 )
 
+// NotificationHandler is a function that handles a notification (fire-and-forget, no response).
+type NotificationHandler func(params json.RawMessage)
+
 // Server represents an MCP server
 type Server struct {
-	info        ServerInfo
-	config      ServerConfig
-	handlers    map[string]RequestHandler
-	transport   Transport
-	handlersMux sync.RWMutex
-	initialized bool
+	info                 ServerInfo
+	config               ServerConfig
+	handlers             map[string]RequestHandler
+	notificationHandlers map[string]NotificationHandler
+	transport            Transport
+	handlersMux          sync.RWMutex
+	initialized          bool
 }
 
 // NewServer creates a new MCP server
 func NewServer(info ServerInfo, config ServerConfig) *Server {
 	return &Server{
-		info:        info,
-		config:      config,
-		handlers:    make(map[string]RequestHandler),
-		initialized: false,
+		info:                 info,
+		config:               config,
+		handlers:             make(map[string]RequestHandler),
+		notificationHandlers: make(map[string]NotificationHandler),
+		initialized:          false,
 	}
 }
 
@@ -33,6 +38,14 @@ func (s *Server) SetRequestHandler(method string, handler RequestHandler) {
 	s.handlersMux.Lock()
 	defer s.handlersMux.Unlock()
 	s.handlers[method] = handler
+}
+
+// SetNotificationHandler sets a handler for a specific notification method.
+// Unlike request handlers, notification handlers are fire-and-forget (no response).
+func (s *Server) SetNotificationHandler(method string, handler NotificationHandler) {
+	s.handlersMux.Lock()
+	defer s.handlersMux.Unlock()
+	s.notificationHandlers[method] = handler
 }
 
 // GetHandler gets a handler for a specific request method
@@ -92,7 +105,14 @@ func (s *Server) handleRequest(data []byte) ([]byte, error) {
 	// start with "notifications/". Sending a response with a nil id causes MCP clients
 	// (e.g. Claude Desktop) to reject the malformed message and corrupt the session.
 	if strings.HasPrefix(request.Method, "notifications/") {
-		fmt.Fprintf(os.Stderr, "Received notification: %s (no response sent per JSON-RPC 2.0 spec)\n", request.Method)
+		fmt.Fprintf(os.Stderr, "Received notification: %s\n", request.Method)
+		// Dispatch to registered notification handler if one exists
+		s.handlersMux.RLock()
+		nh, ok := s.notificationHandlers[request.Method]
+		s.handlersMux.RUnlock()
+		if ok {
+			go nh(request.Params) // fire-and-forget in goroutine to not block transport
+		}
 		return nil, nil
 	}
 

@@ -70,7 +70,10 @@ func (t *StdioTransport) Stop() error {
 	return nil
 }
 
-// processRequests reads and processes requests from stdin
+// processRequests reads and processes requests from stdin.
+// Messages are read in the main loop and dispatched to goroutines so that
+// notifications (e.g. notifications/cancelled) can be processed even while
+// a long-running request is in flight.
 func (t *StdioTransport) processRequests(handler RequestHandlerFunc) {
 	defer t.waitGroup.Done()
 
@@ -104,38 +107,48 @@ func (t *StdioTransport) processRequests(handler RequestHandlerFunc) {
 				fmt.Fprintf(os.Stderr, "Received message: %s\n", line)
 			}
 
-			// Process the request
-			response, err := handler([]byte(line))
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error processing request: %v\n", err)
-				continue
-			}
-
-			// If empty response, don't send anything (notification)
-			if len(response) == 0 {
-				continue
-			}
-
-			// Add newline to the response
-			response = append(response, '\n')
-
-			fmt.Fprintf(os.Stderr, "Sending response (%d bytes)\n", len(response))
-
-			// Write the response
-			_, err = t.writer.Write(response)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error writing response: %v\n", err)
-				continue
-			}
-			
-			// Flush the buffer
-			err = t.writer.Flush()
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error flushing response: %v\n", err)
-				continue
-			}
-
-			fmt.Fprintf(os.Stderr, "Response sent successfully\n")
+			// Dispatch to goroutine so we can keep reading stdin.
+			// This allows notifications/cancelled to be processed while
+			// a long-running tools/call is still executing.
+			go t.handleAndRespond(handler, []byte(line))
 		}
 	}
+}
+
+// handleAndRespond processes a single message and writes the response.
+// Thread-safe: uses t.mutex to serialise writes to stdout.
+func (t *StdioTransport) handleAndRespond(handler RequestHandlerFunc, data []byte) {
+	response, err := handler(data)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error processing request: %v\n", err)
+		return
+	}
+
+	// If empty response, don't send anything (notification)
+	if len(response) == 0 {
+		return
+	}
+
+	// Add newline to the response
+	response = append(response, '\n')
+
+	fmt.Fprintf(os.Stderr, "Sending response (%d bytes)\n", len(response))
+
+	// Serialise writes to stdout
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
+
+	_, err = t.writer.Write(response)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error writing response: %v\n", err)
+		return
+	}
+	
+	err = t.writer.Flush()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error flushing response: %v\n", err)
+		return
+	}
+
+	fmt.Fprintf(os.Stderr, "Response sent successfully\n")
 }

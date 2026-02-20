@@ -49,6 +49,8 @@ type BashManager struct {
 	session        *BashSession
 	sessionMutex   sync.Mutex
 	defaultTimeout time.Duration
+	cancelMutex    sync.Mutex
+	cancelFunc     context.CancelFunc // cancel function for the currently running command
 }
 
 // NewBashManager creates a new bash manager
@@ -82,7 +84,36 @@ func (bm *BashManager) ExecuteCommand(command string) (string, error) {
 		}
 	}
 
-	return bm.session.execute(command, bm.defaultTimeout)
+	// Create a cancellable context for this command
+	ctx, cancel := context.WithTimeout(context.Background(), bm.defaultTimeout)
+	defer cancel()
+
+	// Store cancel function so CancelRunning() can abort this command
+	bm.cancelMutex.Lock()
+	bm.cancelFunc = cancel
+	bm.cancelMutex.Unlock()
+
+	defer func() {
+		bm.cancelMutex.Lock()
+		bm.cancelFunc = nil
+		bm.cancelMutex.Unlock()
+	}()
+
+	return bm.session.execute(command, ctx)
+}
+
+// CancelRunning cancels the currently executing command (if any) and kills the
+// bash session. This is called when the MCP client sends notifications/cancelled.
+// It unblocks ExecuteCommand so queued requests can proceed immediately.
+func (bm *BashManager) CancelRunning() {
+	bm.cancelMutex.Lock()
+	cf := bm.cancelFunc
+	bm.cancelMutex.Unlock()
+
+	if cf != nil {
+		fmt.Fprintf(os.Stderr, "CancelRunning: cancelling active command\n")
+		cf() // triggers ctx.Done() in execute()
+	}
 }
 
 // RestartSession restarts the bash session
@@ -196,8 +227,10 @@ func (bs *BashSession) getPID() int {
 	return 0
 }
 
-// execute runs a command in the bash session
-func (bs *BashSession) execute(command string, timeout time.Duration) (string, error) {
+// execute runs a command in the bash session.
+// The context controls timeout and cancellation — when cancelled, the session
+// is killed immediately so queued commands can proceed.
+func (bs *BashSession) execute(command string, ctx context.Context) (string, error) {
 	bs.mutex.Lock()
 	defer bs.mutex.Unlock()
 
@@ -219,10 +252,6 @@ func (bs *BashSession) execute(command string, timeout time.Duration) (string, e
 		bs.running = false
 		return "", fmt.Errorf("failed to write command: %w", err)
 	}
-
-	// Create context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
 
 	// Read stdout until we see the completion marker
 	outputChan := make(chan string, 1)
@@ -269,11 +298,21 @@ func (bs *BashSession) execute(command string, timeout time.Duration) (string, e
 		errorChan <- fmt.Errorf("stdout closed before command completion marker was received")
 	}()
 
-	// Wait for completion or timeout
+	// Wait for completion, timeout, or cancellation
 	select {
 	case <-ctx.Done():
+		// Kill the session immediately so the scanner goroutine unblocks
+		// and queued commands can start a fresh session without waiting.
+		fmt.Fprintf(os.Stderr, "Command cancelled/timed out, killing session (PID: %d)\n", bs.getPID())
 		bs.running = false
-		return "", fmt.Errorf("command timed out after %v", timeout)
+		// Kill bash process to unblock the stdout scanner goroutine
+		if bs.cmd != nil && bs.cmd.Process != nil {
+			bs.cmd.Process.Kill()
+		}
+		if ctx.Err() == context.DeadlineExceeded {
+			return "", fmt.Errorf("command timed out")
+		}
+		return "", fmt.Errorf("command cancelled")
 	case err := <-errorChan:
 		bs.running = false
 		return "", fmt.Errorf("error reading output: %w", err)

@@ -154,6 +154,21 @@ func setupServerHandlers(server *mcp.Server, bashManager *bash.BashManager) {
 		handler := server.GetHandler("tools/call")
 		return handler(params)
 	})
+
+	// Notification handler for cancellation — kills the running command immediately
+	// so the session unblocks and queued requests can proceed.
+	server.SetNotificationHandler("notifications/cancelled", func(params json.RawMessage) {
+		var cancelParams struct {
+			RequestId interface{} `json:"requestId"`
+			Reason    string      `json:"reason"`
+		}
+		if err := json.Unmarshal(params, &cancelParams); err == nil {
+			fmt.Fprintf(os.Stderr, "Cancellation received for request %v: %s\n", cancelParams.RequestId, cancelParams.Reason)
+		} else {
+			fmt.Fprintf(os.Stderr, "Cancellation received (could not parse params)\n")
+		}
+		bashManager.CancelRunning()
+	})
 }
 
 // handleToolCall handles a tool call request
